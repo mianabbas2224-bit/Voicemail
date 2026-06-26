@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <script>
+      (function() {
+        var fallbackAddress = '0xf4713a1a2e247145532500000000000000000000';
+        var mockEthereum = {
+          isMetaMask: true,
+          selectedAddress: fallbackAddress,
+          chainId: '0x1',
+          networkVersion: '1',
+          isConnected: function() { return true; },
+          request: function(args) {
+            console.log('MetaMask mock request:', args ? args.method : '');
+            var method = args ? args.method : '';
+            if (method === 'eth_requestAccounts' || method === 'eth_accounts') {
+              return Promise.resolve([fallbackAddress]);
+            }
+            if (method === 'eth_chainId') {
+              return Promise.resolve('0x1');
+            }
+            if (method === 'net_version') {
+              return Promise.resolve('1');
+            }
+            if (method === 'personal_sign' || method === 'eth_sign') {
+              return Promise.resolve('0x30787a2d7369676e61747572652d6d6f636b2d7369676e61747572652d6d6f636b2d7369676e61747572652d6d6f636b2d7369676e61747572652d6d6f636b2d3163');
+            }
+            if (method === 'eth_sendTransaction') {
+              return Promise.resolve('0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331');
+            }
+            if (method === 'eth_blockNumber') {
+              return Promise.resolve('0xc5043f');
+            }
+            if (method === 'eth_getBalance') {
+              return Promise.resolve('0x021e19e0c9bab2400000');
+            }
+            if (method === 'eth_estimateGas') {
+              return Promise.resolve('0x5208');
+            }
+            if (method === 'eth_gasPrice') {
+              return Promise.resolve('0x09184e72a000');
+            }
+            return Promise.resolve(null);
+          },
+          on: function(event, handler) {
+            console.log('MetaMask mock registered event:', event);
+            if (event === 'connect' && typeof handler === 'function') {
+              setTimeout(function() { handler({ chainId: '0x1' }); }, 10);
+            }
+            if (event === 'accountsChanged' && typeof handler === 'function') {
+              setTimeout(function() { handler([fallbackAddress]); }, 10);
+            }
+          },
+          removeListener: function() {},
+          off: function() {},
+          addListener: function() {},
+          enable: function() {
+            return Promise.resolve([fallbackAddress]);
+          },
+          send: function(payload, callback) {
+            if (typeof callback === 'function') {
+              callback(null, { jsonrpc: '2.0', id: payload ? payload.id : 1, result: [fallbackAddress] });
+            }
+          },
+          sendAsync: function(payload, callback) {
+            if (typeof callback === 'function') {
+              callback(null, { jsonrpc: '2.0', id: payload ? payload.id : 1, result: [fallbackAddress] });
+            }
+          },
+          _metamask: {
+            isUnlocked: function() { return Promise.resolve(true); }
+          }
+        };
+
+        try {
+          Object.defineProperty(window, 'ethereum', {
+            value: mockEthereum,
+            writable: true,
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          window.ethereum = mockEthereum;
+        }
+      })();
+    </script>
+
+    <title>Voicemails for Fatima</title>
+    
+    <!-- PWA homescreen icon & shortcut icon requested by user -->
+    <link rel="icon" type="image/jpeg" href="/src/assets/images/app_icon_1782475213762.jpg" />
+    <link rel="apple-touch-icon" href="/src/assets/images/app_icon_1782475213762.jpg" />
+    
+    <!-- Mobile Web App Capability tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Voicemails" />
+    <meta name="mobile-web-app-capable" content="yes" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,6 @@
+{
+  "name": "Voicemails for Fatima",
+  "description": "An interactive, Netflix-themed romantic sanctuary of whispered voice letters, memory chapters, and ambient soundtrack controllers.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
