@@ -168,103 +168,104 @@ export const VoicemailList: React.FC<VoicemailListProps> = ({
                     {index + 1}
                   </span>
 
-                  {/* Simulated video poster with live pulsing soundwave */}
-                  <div 
+                  {/* Fully clickable episode content as a native button for flawless mobile performance */}
+                  <button
+                    type="button"
                     onClick={() => onSelectVoicemail(item)}
-                    className="w-20 sm:w-32 h-14 sm:h-20 bg-zinc-950 rounded-lg relative overflow-hidden flex-shrink-0 border border-zinc-800/80 cursor-pointer group-hover:border-red-600/40 transition-colors flex items-center justify-center"
+                    className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 text-left focus:outline-none cursor-pointer group/btn"
                   >
-                    {/* Glowing background shapes */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-red-950/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    
-                    {/* Miniature heartbeat/audio bars in the video frame */}
-                    <div className="flex items-end gap-1 h-8">
-                      {[...Array(6)].map((_, barIdx) => (
-                        <motion.div
-                          key={barIdx}
-                          className="w-0.5 sm:w-1 bg-red-600 rounded-full"
-                          animate={{
-                            height: ['15%', '85%', '15%'],
-                          }}
-                          transition={{
-                            duration: 1.2 + barIdx * 0.15,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Play button overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="p-2 bg-red-600 rounded-full text-white shadow-lg">
-                        <Play className="w-4 h-4 fill-white" />
-                      </div>
-                    </div>
-
-                    {/* Duration badge */}
-                    <span className="absolute bottom-1 right-1.5 bg-black/80 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider text-white">
-                      {item.duration}
-                    </span>
-                  </div>
-
-                  {/* Metadata and synopsis description */}
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      {isUnread && (
-                        <span className="px-1.5 py-0.5 text-[8px] sm:text-[9px] font-sans font-black tracking-widest text-white bg-red-600 rounded uppercase animate-pulse flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                          <span>NEW EPISODE</span>
-                        </span>
-                      )}
-                      {item.chapter && item.chapter.trim() !== '' && (
-                        <span className="px-1.5 py-0.5 text-[8px] sm:text-[9px] font-sans font-black tracking-widest text-red-500 bg-red-950/40 border border-red-900/30 rounded uppercase">
-                          {item.chapter}
-                        </span>
-                      )}
-                      {item.isFavorite && (
-                        <span className="text-[9px] font-bold text-amber-500 flex items-center gap-0.5">
-                          <Star className="w-2.5 h-2.5 fill-amber-500" />
-                          <span>Treasured</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <h4 
-                      onClick={() => onSelectVoicemail(item)}
-                      className="font-sans text-sm sm:text-base text-white font-bold truncate hover:text-red-500 cursor-pointer transition-colors"
-                    >
-                      {item.title}
-                    </h4>
-
-                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                      <p className="font-mono text-[9px] text-zinc-500">
-                        from <span className="text-zinc-400 font-bold">{item.senderName}</span> • {item.dateString}
-                      </p>
+                    {/* Simulated video poster with live pulsing soundwave */}
+                    <div className="w-20 sm:w-32 h-14 sm:h-20 bg-zinc-950 rounded-lg relative overflow-hidden flex-shrink-0 border border-zinc-800/80 group-hover/btn:border-red-600/40 transition-colors flex items-center justify-center">
+                      {/* Glowing background shapes */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-red-950/20 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity" />
                       
-                      {item.reactions && item.reactions.length > 0 && (
-                        <div className="flex items-center gap-1 bg-zinc-950/60 border border-zinc-850/60 px-1.5 py-0.5 rounded-full">
-                          {item.reactions.map((r, rIdx) => {
-                            const isByFatima = r.profileId === 'fatima';
-                            return (
-                              <motion.span
-                                key={rIdx}
-                                initial={{ scale: 0 }}
-                                animate={{ scale: [0, 1.3, 1] }}
-                                className="inline-block text-[11px] cursor-default"
-                                title={`Reacted ${r.emoji} by ${isByFatima ? 'Fatima' : 'Abbas'}`}
-                              >
-                                {r.emoji}
-                              </motion.span>
-                            );
-                          })}
+                      {/* Miniature heartbeat/audio bars in the video frame */}
+                      <div className="flex items-end gap-1 h-8">
+                        {[...Array(6)].map((_, barIdx) => (
+                          <motion.div
+                            key={barIdx}
+                            className="w-0.5 sm:w-1 bg-red-600 rounded-full"
+                            animate={{
+                              height: ['15%', '85%', '15%'],
+                            }}
+                            transition={{
+                              duration: 1.2 + barIdx * 0.15,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                            }}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Play button overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/btn:opacity-100 transition-opacity">
+                        <div className="p-2 bg-red-600 rounded-full text-white shadow-lg">
+                          <Play className="w-4 h-4 fill-white" />
                         </div>
-                      )}
+                      </div>
+
+                      {/* Duration badge */}
+                      <span className="absolute bottom-1 right-1.5 bg-black/80 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider text-white">
+                        {item.duration}
+                      </span>
                     </div>
 
-                    <p className="font-serif italic text-[11px] sm:text-xs text-zinc-400 line-clamp-1 sm:line-clamp-2 mt-1 leading-relaxed max-w-lg">
-                      "{item.noteText}"
-                    </p>
-                  </div>
+                    {/* Metadata and synopsis description */}
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {isUnread && (
+                          <span className="px-1.5 py-0.5 text-[8px] sm:text-[9px] font-sans font-black tracking-widest text-white bg-red-600 rounded uppercase animate-pulse flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                            <span>NEW EPISODE</span>
+                          </span>
+                        )}
+                        {item.chapter && item.chapter.trim() !== '' && (
+                          <span className="px-1.5 py-0.5 text-[8px] sm:text-[9px] font-sans font-black tracking-widest text-red-500 bg-red-950/40 border border-red-900/30 rounded uppercase">
+                            {item.chapter}
+                          </span>
+                        )}
+                        {item.isFavorite && (
+                          <span className="text-[9px] font-bold text-amber-500 flex items-center gap-0.5">
+                            <Star className="w-2.5 h-2.5 fill-amber-500" />
+                            <span>Treasured</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="font-sans text-sm sm:text-base text-white font-bold truncate group-hover/btn:text-red-500 transition-colors">
+                        {item.title}
+                      </h4>
+
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <p className="font-mono text-[9px] text-zinc-500">
+                          from <span className="text-zinc-400 font-bold">{item.senderName}</span> • {item.dateString}
+                        </p>
+                        
+                        {item.reactions && item.reactions.length > 0 && (
+                          <div className="flex items-center gap-1 bg-zinc-950/60 border border-zinc-850/60 px-1.5 py-0.5 rounded-full">
+                            {item.reactions.map((r, rIdx) => {
+                              const isByFatima = r.profileId === 'fatima';
+                              return (
+                                <motion.span
+                                  key={rIdx}
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: [0, 1.3, 1] }}
+                                  className="inline-block text-[11px] cursor-default"
+                                  title={`Reacted ${r.emoji} by ${isByFatima ? 'Fatima' : 'Abbas'}`}
+                                >
+                                  {r.emoji}
+                                </motion.span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="font-serif italic text-[11px] sm:text-xs text-zinc-400 line-clamp-1 sm:line-clamp-2 mt-1 leading-relaxed max-w-lg">
+                        "{item.noteText}"
+                      </p>
+                    </div>
+                  </button>
                 </div>
 
                 {/* Perfect single row, highly aligned interactive actions */}

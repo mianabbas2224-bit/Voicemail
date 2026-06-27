@@ -428,7 +428,7 @@ export default function App() {
         <RosePetals />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60vw] h-[60vw] bg-red-950/20 rounded-full blur-[140px] pointer-events-none" />
 
-        <div className="max-w-4xl w-full text-center space-y-8 relative z-10">
+        <div className="max-w-4xl w-full text-center space-y-8 relative z-30">
           <AnimatePresence mode="wait">
             {!selectedProfileForLogin ? (
               <motion.div
@@ -465,12 +465,13 @@ export default function App() {
                 {/* Profiles Grid */}
                 <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 pt-4">
                   {DEFAULT_PROFILES.map((p) => (
-                    <motion.div
+                    <motion.button
+                      type="button"
                       key={p.id}
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleSelectProfile(p)}
-                      className="flex flex-col items-center gap-3 group cursor-pointer"
+                      className="flex flex-col items-center gap-3 group cursor-pointer focus:outline-none"
                     >
                       {/* Avatar Square */}
                       <div className={`w-24 h-24 sm:w-28 sm:h-28 bg-gradient-to-tr ${p.avatarColor} rounded-xl border-2 border-transparent group-hover:border-white transition-all duration-300 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden`}>
@@ -481,7 +482,7 @@ export default function App() {
                       <span className="text-zinc-400 group-hover:text-white font-sans text-xs sm:text-sm font-bold transition-colors">
                         {p.name}
                       </span>
-                    </motion.div>
+                    </motion.button>
                   ))}
                 </div>
               </motion.div>
