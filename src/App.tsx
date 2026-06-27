@@ -894,6 +894,7 @@ export default function App() {
           <VoicemailRecorder
             onAddVoicemail={handleAddVoicemail}
             onClose={() => setShowRecorder(false)}
+            activeProfile={activeProfile}
           />
         )}
 

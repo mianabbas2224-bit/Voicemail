@@ -6,6 +6,7 @@ import { Mic, Square, Trash2, Heart, Sparkles, Send, X } from 'lucide-react';
 interface VoicemailRecorderProps {
   onAddVoicemail: (newLetter: VoiceLetter, audioBlob: Blob) => void;
   onClose: () => void;
+  activeProfile?: { id: string; name: string } | null;
 }
 
 export const generatePoeticTimestamp = (date: Date): string => {
@@ -36,6 +37,7 @@ export const generatePoeticTimestamp = (date: Date): string => {
 export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
   onAddVoicemail,
   onClose,
+  activeProfile,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -47,7 +49,16 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
   const [title, setTitle] = useState('');
   const [chapter, setChapter] = useState('');
   const [noteText, setNoteText] = useState('');
-  const [senderName, setSenderName] = useState('Abbas');
+  const [senderName, setSenderName] = useState(activeProfile?.name || 'Abbas');
+
+  useEffect(() => {
+    if (activeProfile?.name) {
+      setSenderName(activeProfile.name);
+    }
+  }, [activeProfile]);
+
+  const recipientName = activeProfile?.id === 'fatima' ? 'Abbas' : 'Fatima';
+  const activeProfileName = activeProfile?.name || 'Abbas';
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -221,7 +232,7 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
               Record New Episode
             </h3>
             <p className="font-sans text-xs text-zinc-400 font-light">
-              Deliver a new voicemail to Fatima. Speak slowly, leave a memory.
+              Deliver a new voicemail to {recipientName} from {activeProfileName}. Speak slowly, leave a memory.
             </p>
           </div>
 
