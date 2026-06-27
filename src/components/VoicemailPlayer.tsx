@@ -11,6 +11,8 @@ interface VoicemailPlayerProps {
   onToggleArchive: (id: string) => void;
   onDelete: (id: string) => void;
   onPlayNext?: () => void;
+  activeProfile: { id: string; name: string } | null;
+  onReactToVoicemail?: (id: string, emoji: string) => void;
 }
 
 export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
@@ -19,12 +21,15 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
   onToggleFavorite,
   onToggleArchive,
   onDelete,
+  activeProfile,
+  onReactToVoicemail,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [waveform, setWaveform] = useState<number[]>(Array(20).fill(10));
   const [revealedChars, setRevealedChars] = useState(0);
   const [showAnniversarySparkles, setShowAnniversarySparkles] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [floatingReactions, setFloatingReactions] = useState<{ id: number; emoji: string; x: number; y: number }[]>([]);
   const [ambientSounds, setAmbientSounds] = useState({
     piano: false,
     rain: false,
@@ -48,6 +53,28 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
     globalAudio.toggleAtmosphere(id, nextState, 0.45);
   };
 
+  const handleReactClick = (emoji: string) => {
+    if (!voicemail) return;
+    if (onReactToVoicemail) {
+      onReactToVoicemail(voicemail.id, emoji);
+    }
+    
+    // Add multiple floating instances for a gorgeous burst effect!
+    const newFloats = [...Array(4)].map((_, idx) => ({
+      id: Date.now() + idx + Math.random(),
+      emoji,
+      x: 80 + Math.random() * 120, // offset within player container
+      y: 320 + Math.random() * 40,
+    }));
+    
+    setFloatingReactions((prev) => [...prev, ...newFloats]);
+    
+    // Clean up after animation finishes
+    setTimeout(() => {
+      setFloatingReactions((prev) => prev.filter((item) => !newFloats.some((nf) => nf.id === item.id)));
+    }, 2000);
+  };
+
   useEffect(() => {
     if (!voicemail) return;
 
@@ -57,7 +84,16 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
       voicemail.dateString.toLowerCase().includes('anniversary');
     setShowAnniversarySparkles(isSpecial);
 
-    handlePlay();
+    const startAutoplay = async () => {
+      try {
+        await handlePlay();
+      } catch (err) {
+        console.warn("Autoplay was prevented by browser policy:", err);
+        setIsPlaying(false);
+        handleStop();
+      }
+    };
+    startAutoplay();
 
     setRevealedChars(0);
     const interval = setInterval(() => {
@@ -83,22 +119,28 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
     animationRef.current = requestAnimationFrame(updateWaveform);
   };
 
-  const handlePlay = () => {
+  const handlePlay = async () => {
     if (!voicemail) return;
     globalAudio.init();
-
-    if (voicemail.audioBlobUrl) {
-      globalAudio.playRecordedVoicemail(voicemail.audioBlobUrl, () => {
-        setIsPlaying(false);
-        handleStop();
-      });
-    } else {
-      globalAudio.playSyntheticVoicemail();
-    }
 
     setIsPlaying(true);
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
     updateWaveform();
+
+    try {
+      if (voicemail.audioBlobUrl) {
+        await globalAudio.playRecordedVoicemail(voicemail.audioBlobUrl, () => {
+          setIsPlaying(false);
+          handleStop();
+        });
+      } else {
+        globalAudio.playSyntheticVoicemail();
+      }
+    } catch (err) {
+      console.warn("Playback failed or blocked:", err);
+      setIsPlaying(false);
+      handleStop();
+    }
   };
 
   const handleStop = () => {
@@ -202,8 +244,23 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
           <h3 className="font-sans text-2xl md:text-3xl text-white font-extrabold tracking-tight mb-1">
             {voicemail.title}
           </h3>
-          <p className="font-mono text-xs text-zinc-500 mb-6 tracking-wide">
-            {voicemail.dateString}
+          <p className="font-mono text-xs text-zinc-500 mb-6 tracking-wide flex items-center justify-center gap-2 flex-wrap">
+            <span>from <span className="text-zinc-400 font-bold">{voicemail.senderName}</span> • {voicemail.dateString}</span>
+            {voicemail.reactions && voicemail.reactions.length > 0 && (
+              <span className="flex items-center gap-1 bg-zinc-950/60 border border-zinc-850/60 px-2 py-0.5 rounded-full select-none">
+                {voicemail.reactions.map((r, rIdx) => (
+                  <motion.span
+                    key={rIdx}
+                    animate={{ scale: [1, 1.25, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5, delay: rIdx * 0.2 }}
+                    className="inline-block text-[11px]"
+                    title={`Reacted ${r.emoji} by ${r.profileId === 'fatima' ? 'Fatima' : 'Abbas'}`}
+                  >
+                    {r.emoji}
+                  </motion.span>
+                ))}
+              </span>
+            )}
           </p>
 
           {/* Beating & blooming red heartbeat visualizer */}
@@ -361,10 +418,96 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
             </p>
             <div className="mt-4 text-right">
               <span className="font-sans text-xs font-bold text-red-500">
-                — Abbas
+                — {voicemail.senderName}
               </span>
             </div>
           </div>
+
+          {/* Romantic Reactions Selector & Active Badges */}
+          <div className="w-full mt-4 bg-zinc-900/40 border border-zinc-850 p-4 rounded-xl text-center relative z-10">
+            <h5 className="font-sans text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">
+              React to this whispered memory
+            </h5>
+            
+            {/* Reaction Option Buttons */}
+            <div className="flex items-center justify-center gap-4 mb-2.5">
+              {[
+                { emoji: '❤️', label: 'Heart' },
+                { emoji: '🌹', label: 'Rose' },
+                { emoji: '✨', label: 'Sparkle' },
+                { emoji: '💌', label: 'Love Letter' },
+                { emoji: '🫂', label: 'Hug' },
+              ].map((item) => {
+                const hasReacted = voicemail.reactions?.some(
+                  (r) => r.profileId === activeProfile?.id && r.emoji === item.emoji
+                );
+                return (
+                  <motion.button
+                    key={item.emoji}
+                    whileHover={{ scale: 1.3, rotate: [0, -10, 10, 0] }}
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => handleReactClick(item.emoji)}
+                    className={`text-2xl p-1.5 rounded-full cursor-pointer transition-all duration-300 ${
+                      hasReacted
+                        ? 'bg-red-950/40 border border-red-900/40 shadow-[0_0_12px_rgba(239,68,68,0.2)]'
+                        : 'hover:bg-zinc-800 border border-transparent'
+                    }`}
+                    title={item.label}
+                  >
+                    {item.emoji}
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* Active Reactions List */}
+            {voicemail.reactions && voicemail.reactions.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                {voicemail.reactions.map((r, rIdx) => {
+                  const isByFatima = r.profileId === 'fatima';
+                  return (
+                    <motion.div
+                      key={rIdx}
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-zinc-950 border ${
+                        isByFatima ? 'border-rose-900/50 text-rose-300' : 'border-zinc-800 text-zinc-300'
+                      } font-sans font-medium`}
+                    >
+                      <span>{r.emoji}</span>
+                      <span className="text-[8px] opacity-70">
+                        {isByFatima ? 'Fatima' : 'Abbas'}
+                      </span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[9px] font-sans text-zinc-500 italic">No reactions yet. Press an icon above to react.</p>
+            )}
+          </div>
+
+          {/* Floating Reactions Burst */}
+          <AnimatePresence>
+            {floatingReactions.map((item) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, scale: 0.5, y: item.y, x: item.x }}
+                animate={{
+                  opacity: [0, 1, 1, 0],
+                  scale: [0.5, 1.6, 1.3, 0.7],
+                  y: item.y - 150 - Math.random() * 80,
+                  x: item.x + (Math.random() - 0.5) * 100,
+                  rotate: (Math.random() - 0.5) * 45,
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.6, ease: "easeOut" }}
+                className="absolute z-50 text-3xl pointer-events-none select-none"
+              >
+                {item.emoji}
+              </motion.div>
+            ))}
+          </AnimatePresence>
 
           {/* Netflix Style footer controls */}
           <div className="w-full grid grid-cols-3 gap-3 mt-8 pt-6 border-t border-zinc-900">

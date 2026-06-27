@@ -16,6 +16,7 @@ export class AudioEngine {
   // Active playing audio element (for custom recorded voicemails)
   private activeAudioElement: HTMLAudioElement | null = null;
   private audioSourceNode: MediaElementAudioSourceNode | null = null;
+  private activeBufferSource: AudioBufferSourceNode | null = null;
 
   // Synthetic Voicemail Drone (for pre-loaded romantic letters)
   private voicemailDrone: {
@@ -738,42 +739,69 @@ export class AudioEngine {
   }
 
   // PLAY RECORDED AUDIO (Microphone Recording URL)
-  public playRecordedVoicemail(blobUrl: string, onEnded: () => void) {
+  public async playRecordedVoicemail(blobUrl: string, onEnded: () => void): Promise<void> {
     this.resumeContext();
-    if (!this.ctx || !this.analyser) return;
-
     this.stopRecordedVoicemail();
     this.stopSyntheticVoicemail();
 
+    if (!this.ctx || !this.analyser) {
+      this.playRecordedVoicemailFallback(blobUrl, onEnded);
+      return;
+    }
+
+    try {
+      // Decode audio data for perfect 100% reliable Web Audio visualizer playback on iOS and Android
+      const response = await fetch(blobUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      
+      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+        if (!this.ctx) return reject(new Error('AudioContext closed'));
+        this.ctx.decodeAudioData(arrayBuffer, resolve, reject);
+      });
+
+      const source = this.ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.analyser);
+      this.activeBufferSource = source;
+
+      source.onended = () => {
+        if (this.activeBufferSource === source) {
+          onEnded();
+          this.stopRecordedVoicemail();
+        }
+      };
+
+      source.start(0);
+    } catch (e) {
+      console.warn('Web Audio decoding failed or was blocked, falling back to standard HTML5 Audio:', e);
+      this.playRecordedVoicemailFallback(blobUrl, onEnded);
+    }
+  }
+
+  private async playRecordedVoicemailFallback(blobUrl: string, onEnded: () => void) {
     try {
       const audio = new Audio(blobUrl);
       audio.crossOrigin = 'anonymous';
       this.activeAudioElement = audio;
-
-      // Pipe into standard analyzer node so recorded voicemails ALSO bounce the glowing waveform
-      const source = this.ctx.createMediaElementSource(audio);
-      this.audioSourceNode = source;
-
-      source.connect(this.analyser);
-      // Master analyzer connects to destination, so we hear it perfectly
-
       audio.addEventListener('ended', () => {
         onEnded();
         this.stopRecordedVoicemail();
       });
-
-      audio.play();
-    } catch (e) {
-      console.error('Error starting recorded voicemail playback:', e);
-      // Fallback: standard audio play without routing
-      const audio = new Audio(blobUrl);
-      this.activeAudioElement = audio;
-      audio.addEventListener('ended', onEnded);
-      audio.play();
+      await audio.play();
+    } catch (err) {
+      console.error('Fallback HTML5 Audio play failed:', err);
+      onEnded();
     }
   }
 
   public stopRecordedVoicemail() {
+    if (this.activeBufferSource) {
+      try {
+        this.activeBufferSource.stop();
+        this.activeBufferSource.disconnect();
+      } catch (e) {}
+      this.activeBufferSource = null;
+    }
     if (this.activeAudioElement) {
       try {
         this.activeAudioElement.pause();

@@ -7,17 +7,28 @@
     <script>
       (function() {
         var fallbackAddress = '0xf4713a1a2e247145532500000000000000000000';
+        var listeners = {};
+        
         var mockEthereum = {
           isMetaMask: true,
+          isStatus: true,
           selectedAddress: fallbackAddress,
           chainId: '0x1',
           networkVersion: '1',
+          autoRefreshOnNetworkChange: false,
           isConnected: function() { return true; },
+          
           request: function(args) {
             console.log('MetaMask mock request:', args ? args.method : '');
             var method = args ? args.method : '';
             if (method === 'eth_requestAccounts' || method === 'eth_accounts') {
-              return Promise.resolve([fallbackAddress]);
+              var accounts = [fallbackAddress];
+              mockEthereum.selectedAddress = fallbackAddress;
+              setTimeout(function() {
+                mockEthereum.emit('connect', { chainId: '0x1' });
+                mockEthereum.emit('accountsChanged', accounts);
+              }, 0);
+              return Promise.resolve(accounts);
             }
             if (method === 'eth_chainId') {
               return Promise.resolve('0x1');
@@ -43,48 +54,132 @@
             if (method === 'eth_gasPrice') {
               return Promise.resolve('0x09184e72a000');
             }
+            if (method === 'eth_getTransactionCount') {
+              return Promise.resolve('0x0');
+            }
             return Promise.resolve(null);
           },
+          
           on: function(event, handler) {
             console.log('MetaMask mock registered event:', event);
-            if (event === 'connect' && typeof handler === 'function') {
-              setTimeout(function() { handler({ chainId: '0x1' }); }, 10);
+            if (typeof handler === 'function') {
+              if (!listeners[event]) {
+                listeners[event] = [];
+              }
+              listeners[event].push(handler);
             }
-            if (event === 'accountsChanged' && typeof handler === 'function') {
-              setTimeout(function() { handler([fallbackAddress]); }, 10);
+            return this;
+          },
+          
+          removeListener: function(event, handler) {
+            if (listeners[event]) {
+              var index = listeners[event].indexOf(handler);
+              if (index > -1) {
+                listeners[event].splice(index, 1);
+              }
+            }
+            return this;
+          },
+          
+          off: function(event, handler) {
+            return this.removeListener(event, handler);
+          },
+          
+          addListener: function(event, handler) {
+            return this.on(event, handler);
+          },
+          
+          removeAllListeners: function(event) {
+            if (event) {
+              delete listeners[event];
+            } else {
+              listeners = {};
+            }
+            return this;
+          },
+          
+          emit: function(event, data) {
+            if (listeners[event]) {
+              listeners[event].forEach(function(handler) {
+                try {
+                  handler(data);
+                } catch (e) {
+                  console.error('Error in ethereum event handler:', e);
+                }
+              });
             }
           },
-          removeListener: function() {},
-          off: function() {},
-          addListener: function() {},
+          
           enable: function() {
-            return Promise.resolve([fallbackAddress]);
+            var accounts = [fallbackAddress];
+            setTimeout(function() {
+              mockEthereum.emit('connect', { chainId: '0x1' });
+              mockEthereum.emit('accountsChanged', accounts);
+            }, 0);
+            return Promise.resolve(accounts);
           },
+          
           send: function(payload, callback) {
+            var method = payload ? (typeof payload === 'string' ? payload : payload.method) : '';
+            var result = [fallbackAddress];
+            if (method === 'eth_chainId') result = '0x1';
+            if (method === 'net_version') result = '1';
+            
             if (typeof callback === 'function') {
-              callback(null, { jsonrpc: '2.0', id: payload ? payload.id : 1, result: [fallbackAddress] });
+              callback(null, { jsonrpc: '2.0', id: payload ? payload.id : 1, result: result });
+              return;
             }
+            
+            if (payload && typeof payload === 'object') {
+              return Promise.resolve({ jsonrpc: '2.0', id: payload.id || 1, result: result });
+            }
+            
+            return Promise.resolve(result);
           },
+          
           sendAsync: function(payload, callback) {
+            var method = payload ? (typeof payload === 'string' ? payload : payload.method) : '';
+            var result = [fallbackAddress];
+            if (method === 'eth_chainId') result = '0x1';
+            if (method === 'net_version') result = '1';
+            
             if (typeof callback === 'function') {
-              callback(null, { jsonrpc: '2.0', id: payload ? payload.id : 1, result: [fallbackAddress] });
+              setTimeout(function() {
+                callback(null, { jsonrpc: '2.0', id: payload ? payload.id : 1, result: result });
+              }, 0);
+              return;
             }
+            
+            return Promise.resolve({ jsonrpc: '2.0', id: payload ? payload.id : 1, result: result });
           },
+          
+          isUnlocked: function() { return Promise.resolve(true); },
+          
           _metamask: {
             isUnlocked: function() { return Promise.resolve(true); }
           }
         };
 
+        mockEthereum.providers = [mockEthereum];
+
+        var currentEthereum = mockEthereum;
+
         try {
           Object.defineProperty(window, 'ethereum', {
-            value: mockEthereum,
-            writable: true,
+            get: function() { return currentEthereum; },
+            set: function(val) { currentEthereum = val; },
             configurable: true,
             enumerable: true
           });
         } catch (e) {
           window.ethereum = mockEthereum;
         }
+
+        try {
+          window.web3 = {
+            currentProvider: mockEthereum
+          };
+        } catch (e) {}
       })();
     </script>
 

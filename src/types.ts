@@ -24,6 +24,7 @@ export interface VoiceLetter {
   synthPresetIndex?: number; // Pre-loaded ambient track preset index
   timestamp: number; // Unix timestamp for sorting
   listenedBy?: string[]; // Array of profile IDs who have listened
+  reactions?: { profileId: string; emoji: string }[]; // Romantic reactions
 }
 
 export interface AtmosphereSound {

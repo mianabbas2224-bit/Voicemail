@@ -8,6 +8,7 @@ import { VoicemailPlayer } from './components/VoicemailPlayer';
 import { VoicemailRecorder } from './components/VoicemailRecorder';
 import { Heart, Plus, Sparkles, Calendar, BookOpen, Mic, X, Play, Info, Volume2, VolumeX, Star, Tv, LogOut, UserPlus, Bell } from 'lucide-react';
 import { globalAudio } from './utils/audioEngine';
+import { saveTrailerBlob, getTrailerBlob, deleteTrailerBlob } from './utils/indexedDB';
 
 const LOCAL_STORAGE_KEY = 'fatima_voicemails_letters';
 
@@ -55,26 +56,55 @@ export default function App() {
   const [listenedCount, setListenedCount] = useState(0);
   const [showSecretToast, setShowSecretToast] = useState(false);
 
-  // Initialize and load from local storage
+  // Initialize and load from local storage + IndexedDB hydration
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (stored) {
-        const parsed: VoiceLetter[] = JSON.parse(stored);
-        // Only keep genuine user-recorded voicemails whose id starts with 'custom-'
-        const genuine = parsed.filter(v => typeof v.id === 'string' && v.id.startsWith('custom-'));
-        setVoicemails(genuine);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(genuine));
-      } else {
-        // App starts empty as requested: "there should be no voice note unti both partners share"
+    async function loadAndHydrateVoicemails() {
+      try {
+        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (stored) {
+          const parsed: VoiceLetter[] = JSON.parse(stored);
+          const genuine = parsed.filter(v => typeof v.id === 'string' && v.id.startsWith('custom-'));
+          
+          // Asynchronously re-hydrate each voice letter with a fresh, active object URL from IndexedDB
+          const hydrated = await Promise.all(
+            genuine.map(async (v) => {
+              try {
+                const blob = await getTrailerBlob(v.id);
+                if (blob) {
+                  const url = URL.createObjectURL(blob);
+                  return { ...v, audioBlobUrl: url };
+                }
+              } catch (err) {
+                console.error(`Error loading blob for voicemail ${v.id}:`, err);
+              }
+              return v;
+            })
+          );
+          
+          setVoicemails(hydrated);
+        } else {
+          setVoicemails([]);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
+        }
+      } catch (e) {
+        console.error('Failed to load local storage and IndexedDB:', e);
         setVoicemails([]);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
       }
-    } catch (e) {
-      console.error('Failed to load local storage:', e);
-      setVoicemails([]);
     }
+    loadAndHydrateVoicemails();
   }, []);
+
+  // Lock document body scroll when any modal or fullscreen player is active for perfect mobile smoothness
+  useEffect(() => {
+    if (selectedVoicemail || showRecorder || selectedOverlayCategory) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedVoicemail, showRecorder, selectedOverlayCategory]);
 
   // Manage visibility and background ambient music
   useEffect(() => {
@@ -164,7 +194,13 @@ export default function App() {
   };
 
   // Add custom recorded voicemail
-  const handleAddVoicemail = (newLetter: VoiceLetter) => {
+  const handleAddVoicemail = async (newLetter: VoiceLetter, audioBlob: Blob) => {
+    try {
+      await saveTrailerBlob(newLetter.id, audioBlob);
+    } catch (err) {
+      console.error("Failed to save recording to IndexedDB:", err);
+    }
+
     // Sender automatically listened to their own voicemail
     const letterWithListened = {
       ...newLetter,
@@ -189,6 +225,52 @@ export default function App() {
       } catch (e) {
         console.error('Failed to trigger native Notification:', e);
       }
+    }
+  };
+
+  // React to voicemail message with romance emoji
+  const handleReactToVoicemail = (id: string, emoji: string) => {
+    if (!activeProfile) return;
+
+    const updated = voicemails.map((letter) => {
+      if (letter.id === id) {
+        const reactions = letter.reactions || [];
+        const existingIdx = reactions.findIndex(
+          (r) => r.profileId === activeProfile.id && r.emoji === emoji
+        );
+
+        let newReactions = [...reactions];
+        if (existingIdx > -1) {
+          // Toggle off
+          newReactions.splice(existingIdx, 1);
+        } else {
+          // Toggle on
+          newReactions.push({ profileId: activeProfile.id, emoji });
+        }
+
+        return { ...letter, reactions: newReactions };
+      }
+      return letter;
+    });
+
+    saveToLocalStorage(updated);
+
+    // Sync selectedVoicemail active state in-player
+    if (selectedVoicemail && selectedVoicemail.id === id) {
+      setSelectedVoicemail((prev) => {
+        if (!prev) return null;
+        const reactions = prev.reactions || [];
+        const existingIdx = reactions.findIndex(
+          (r) => r.profileId === activeProfile.id && r.emoji === emoji
+        );
+        let newReactions = [...reactions];
+        if (existingIdx > -1) {
+          newReactions.splice(existingIdx, 1);
+        } else {
+          newReactions.push({ profileId: activeProfile.id, emoji });
+        }
+        return { ...prev, reactions: newReactions };
+      });
     }
   };
 
@@ -225,9 +307,14 @@ export default function App() {
   };
 
   // Let Go (Delete)
-  const handleDeleteVoicemail = (id: string) => {
+  const handleDeleteVoicemail = async (id: string) => {
     const updated = voicemails.filter((letter) => letter.id !== id);
     saveToLocalStorage(updated);
+    try {
+      await deleteTrailerBlob(id);
+    } catch (err) {
+      console.error("Failed to delete recording from IndexedDB:", err);
+    }
   };
 
   // Select voicemail to play
@@ -866,6 +953,8 @@ export default function App() {
         {selectedVoicemail && (
           <VoicemailPlayer
             voicemail={selectedVoicemail}
+            activeProfile={activeProfile}
+            onReactToVoicemail={handleReactToVoicemail}
             onClose={() => {
               setSelectedVoicemail(null);
               if (window.history.state?.playerOpen) {

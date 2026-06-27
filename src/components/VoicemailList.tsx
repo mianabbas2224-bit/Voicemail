@@ -236,9 +236,30 @@ export const VoicemailList: React.FC<VoicemailListProps> = ({
                       {item.title}
                     </h4>
 
-                    <p className="font-mono text-[9px] text-zinc-500">
-                      {item.dateString}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <p className="font-mono text-[9px] text-zinc-500">
+                        from <span className="text-zinc-400 font-bold">{item.senderName}</span> • {item.dateString}
+                      </p>
+                      
+                      {item.reactions && item.reactions.length > 0 && (
+                        <div className="flex items-center gap-1 bg-zinc-950/60 border border-zinc-850/60 px-1.5 py-0.5 rounded-full">
+                          {item.reactions.map((r, rIdx) => {
+                            const isByFatima = r.profileId === 'fatima';
+                            return (
+                              <motion.span
+                                key={rIdx}
+                                initial={{ scale: 0 }}
+                                animate={{ scale: [0, 1.3, 1] }}
+                                className="inline-block text-[11px] cursor-default"
+                                title={`Reacted ${r.emoji} by ${isByFatima ? 'Fatima' : 'Abbas'}`}
+                              >
+                                {r.emoji}
+                              </motion.span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
 
                     <p className="font-serif italic text-[11px] sm:text-xs text-zinc-400 line-clamp-1 sm:line-clamp-2 mt-1 leading-relaxed max-w-lg">
                       "{item.noteText}"

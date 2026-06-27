@@ -4,7 +4,7 @@ import { VoiceLetter } from '../types';
 import { Mic, Square, Trash2, Heart, Sparkles, Send, X } from 'lucide-react';
 
 interface VoicemailRecorderProps {
-  onAddVoicemail: (newLetter: VoiceLetter) => void;
+  onAddVoicemail: (newLetter: VoiceLetter, audioBlob: Blob) => void;
   onClose: () => void;
 }
 
@@ -126,7 +126,8 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(blob);
         setAudioBlobUrl(url);
         setAudioBlob(blob);
@@ -161,7 +162,7 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
 
   const handleDeliver = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!audioBlobUrl) return;
+    if (!audioBlobUrl || !audioBlob) return;
 
     const newLetter: VoiceLetter = {
       id: 'custom-' + Date.now(),
@@ -178,7 +179,7 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
       timestamp: Date.now(),
     };
 
-    onAddVoicemail(newLetter);
+    onAddVoicemail(newLetter, audioBlob);
     onClose();
   };
 
@@ -196,7 +197,7 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
         animate={{ opacity: 0.85 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 bg-black/85 backdrop-blur-md"
+        className="absolute inset-0 bg-black/85 backdrop-blur-md"
       />
 
       {/* Card */}
@@ -208,7 +209,8 @@ export const VoicemailRecorder: React.FC<VoicemailRecorderProps> = ({
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full text-zinc-500 hover:text-white hover:bg-zinc-900 transition-colors duration-300 z-20"
+          className="absolute top-4 right-4 p-2.5 rounded-full text-zinc-400 bg-zinc-900 border border-zinc-800 hover:text-white hover:bg-zinc-800 active:scale-95 transition-all z-20 shadow-md"
+          title="Close Recorder"
         >
           <X className="w-5 h-5" />
         </button>

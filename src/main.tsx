@@ -35,6 +35,28 @@ if (typeof window !== 'undefined') {
       event.stopPropagation();
     }
   }, true);
+
+  // Intercept console.error to silence injected wallet-extension errors in sandbox
+  const originalConsoleError = console.error;
+  console.error = function (...args) {
+    const isMetaMaskError = args.some(arg => {
+      if (!arg) return false;
+      const str = typeof arg === 'string' ? arg : (arg.message || String(arg));
+      return (
+        str.includes('MetaMask') ||
+        str.includes('ethereum') ||
+        str.includes('web3') ||
+        str.includes('RPC error') ||
+        str.includes('provider')
+      );
+    });
+
+    if (isMetaMaskError) {
+      console.warn('Silenced MetaMask/Web3 console.error in sandbox:', ...args);
+      return;
+    }
+    originalConsoleError.apply(console, args);
+  };
 }
 
 createRoot(document.getElementById('root')!).render(
