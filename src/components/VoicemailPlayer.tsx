@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalAudio } from '../utils/audioEngine';
 import { VoiceLetter } from '../types';
-import { Heart, Trash2, X, Play, Pause, Sparkles, Music, CloudRain, Waves, Tv, Star, Volume2, ArrowLeft } from 'lucide-react';
+import { Heart, Trash2, X, Play, Pause, Sparkles, Tv, Star, Volume2, ArrowLeft } from 'lucide-react';
 
 interface VoicemailPlayerProps {
   voicemail: VoiceLetter | null;
@@ -30,28 +30,8 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
   const [showAnniversarySparkles, setShowAnniversarySparkles] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState<{ id: number; emoji: string; x: number; y: number }[]>([]);
-  const [ambientSounds, setAmbientSounds] = useState({
-    piano: false,
-    rain: false,
-    waves: false,
-  });
   
   const animationRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    setAmbientSounds({
-      piano: !!(globalAudio as any).pianoInterval,
-      rain: !!(globalAudio as any).rainNode,
-      waves: !!(globalAudio as any).wavesNode,
-    });
-  }, [voicemail]);
-
-  const handleToggleAmbient = (id: 'piano' | 'rain' | 'waves') => {
-    globalAudio.init();
-    const nextState = !ambientSounds[id];
-    setAmbientSounds((prev) => ({ ...prev, [id]: nextState }));
-    globalAudio.toggleAtmosphere(id, nextState, 0.45);
-  };
 
   const handleReactClick = (emoji: string) => {
     if (!voicemail) return;
@@ -361,51 +341,6 @@ export const VoicemailPlayer: React.FC<VoicemailPlayerProps> = ({
                 <Play className="w-5 h-5 fill-current text-black translate-x-0.5" />
               )}
             </button>
-
-            {/* Ambient Soundscapes quick toggles while listening */}
-            <div className="flex flex-col items-center mt-1">
-              <span className="text-[10px] font-sans font-black uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
-                <Volume2 className="w-3 h-3 text-red-600" />
-                <span>Audio Channels [Atmos]</span>
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleToggleAmbient('piano')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-sans font-bold transition-all duration-300 border ${
-                    ambientSounds.piano
-                      ? 'bg-zinc-800 text-red-500 border-red-600/40 shadow-sm'
-                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-850'
-                  }`}
-                >
-                  <Music className="w-3 h-3" />
-                  <span>Piano</span>
-                </button>
-                
-                <button
-                  onClick={() => handleToggleAmbient('rain')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-sans font-bold transition-all duration-300 border ${
-                    ambientSounds.rain
-                      ? 'bg-zinc-800 text-blue-400 border-blue-600/40 shadow-sm'
-                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-850'
-                  }`}
-                >
-                  <CloudRain className="w-3 h-3" />
-                  <span>Rain</span>
-                </button>
-
-                <button
-                  onClick={() => handleToggleAmbient('waves')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-sans font-bold transition-all duration-300 border ${
-                    ambientSounds.waves
-                      ? 'bg-zinc-800 text-teal-400 border-teal-600/40 shadow-sm'
-                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-850'
-                  }`}
-                >
-                  <Waves className="w-3 h-3" />
-                  <span>Waves</span>
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Letter Note (Written out) */}

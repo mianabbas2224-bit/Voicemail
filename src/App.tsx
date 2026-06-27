@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceLetter } from './types';
-import { RosePetals } from './components/RosePetals';
 import { DailyGreetings } from './components/DailyGreetings';
 import { VoicemailList } from './components/VoicemailList';
 import { VoicemailPlayer } from './components/VoicemailPlayer';
 import { VoicemailRecorder } from './components/VoicemailRecorder';
-import { Heart, Plus, Sparkles, Calendar, BookOpen, Mic, X, Play, Info, Volume2, VolumeX, Star, Tv, LogOut, UserPlus, Bell } from 'lucide-react';
+import { Heart, Plus, Sparkles, Calendar, BookOpen, Mic, X, Play, Info, Star, Tv, LogOut, UserPlus, Bell } from 'lucide-react';
 import { globalAudio } from './utils/audioEngine';
 import { saveTrailerBlob, getTrailerBlob, deleteTrailerBlob } from './utils/indexedDB';
 
@@ -48,7 +47,6 @@ export default function App() {
   const [selectedProfileForLogin, setSelectedProfileForLogin] = useState<Profile | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [isBgMusicOn, setIsBgMusicOn] = useState(true);
   const [notificationToast, setNotificationToast] = useState<{ message: string; voicemail?: VoiceLetter } | null>(null);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
 
@@ -105,57 +103,6 @@ export default function App() {
       document.body.style.overflow = '';
     };
   }, [selectedVoicemail, showRecorder, selectedOverlayCategory]);
-
-  // Manage visibility and background ambient music
-  useEffect(() => {
-    if (!activeProfile) return;
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Person is not actively using the app (tab hidden or window minimized). Stop the music!
-        try {
-          globalAudio.toggleAtmosphere('piano', false, 0);
-        } catch (e) {
-          console.error('Error pausing music on visibility hidden:', e);
-        }
-      } else {
-        // Tab is back in focus. Play only if the user has music turned ON.
-        if (isBgMusicOn) {
-          try {
-            globalAudio.init();
-            globalAudio.toggleAtmosphere('piano', true, 0.35);
-          } catch (e) {
-            console.error('Error resuming music on visibility visible:', e);
-          }
-        }
-      }
-    };
-
-    // If the user has it ON when they are inside the app, make sure it starts
-    if (isBgMusicOn) {
-      try {
-        globalAudio.init();
-        globalAudio.toggleAtmosphere('piano', true, 0.35);
-      } catch (e) {
-        console.error('Error starting piano:', e);
-      }
-    } else {
-      try {
-        globalAudio.toggleAtmosphere('piano', false, 0);
-      } catch (e) {
-        console.error('Error stopping piano:', e);
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      // Make sure we stop music on unmount or switch profile
-      try {
-        globalAudio.toggleAtmosphere('piano', false, 0);
-      } catch (e) {}
-    };
-  }, [activeProfile, isBgMusicOn]);
 
   // Auto-dismiss notification toasts after 6 seconds
   useEffect(() => {
@@ -424,8 +371,7 @@ export default function App() {
   if (!activeProfile) {
     return (
       <div className="min-h-screen bg-[#141414] text-white flex flex-col items-center justify-center p-4 relative font-sans overflow-hidden">
-        {/* Floating Rose Petals / Glowing Ember Particle System */}
-        <RosePetals />
+        {/* Floating Glowing Ember Particle System */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60vw] h-[60vw] bg-red-950/20 rounded-full blur-[140px] pointer-events-none" />
 
         <div className="max-w-4xl w-full text-center space-y-8 relative z-30">
@@ -569,9 +515,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#141414] text-white pb-20 relative font-sans overflow-x-hidden selection:bg-red-600/30 selection:text-white">
-      
-      {/* Floating Rose Petals / Glowing Ember Particle System */}
-      <RosePetals />
 
       {/* Netflix Top Navigation Bar */}
       <nav className="w-full bg-gradient-to-b from-black/80 to-transparent py-4 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-50 backdrop-blur-xs">
@@ -600,30 +543,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right side items: Music Toggle + Bell + User Profile switcher dropdown */}
+        {/* Right side items: Bell + User Profile switcher dropdown */}
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* Ambient Music Toggle Button */}
-          <button
-            onClick={() => {
-              const nextState = !isBgMusicOn;
-              setIsBgMusicOn(nextState);
-            }}
-            className="p-2 sm:px-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800/80 rounded-lg text-zinc-400 hover:text-white transition-all flex items-center gap-2 text-xs font-bold font-sans select-none active:scale-95 shadow-md group relative"
-            title="Toggle Background Music"
-          >
-            {isBgMusicOn ? (
-              <>
-                <Volume2 className="w-4 h-4 text-red-500 animate-pulse" />
-                <span className="hidden sm:inline text-[10px] tracking-wider uppercase font-extrabold text-zinc-300">Music: On</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4 text-zinc-500" />
-                <span className="hidden sm:inline text-[10px] tracking-wider uppercase font-extrabold text-zinc-500">Music: Off</span>
-              </>
-            )}
-          </button>
-
           {/* Notification Bell Dropdown */}
           <div className="relative">
             <button
