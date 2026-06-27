@@ -54,16 +54,31 @@ export default function App() {
   const [listenedCount, setListenedCount] = useState(0);
   const [showSecretToast, setShowSecretToast] = useState(false);
 
-  // Initialize and load from local storage + IndexedDB hydration
+  // Initialize and load from local storage + Backend Sync
   useEffect(() => {
     async function loadAndHydrateVoicemails() {
+      try {
+        const response = await fetch('/api/voicemails');
+        if (response.ok) {
+          const data = await response.json();
+          const hydrated = data.map((v: any) => ({
+            ...v,
+            audioBlobUrl: `/api/voicemails/${v.id}/audio`
+          }));
+          setVoicemails(hydrated);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(hydrated));
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch from backend, falling back to local storage:", err);
+      }
+
       try {
         const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (stored) {
           const parsed: VoiceLetter[] = JSON.parse(stored);
           const genuine = parsed.filter(v => typeof v.id === 'string' && v.id.startsWith('custom-'));
           
-          // Asynchronously re-hydrate each voice letter with a fresh, active object URL from IndexedDB
           const hydrated = await Promise.all(
             genuine.map(async (v) => {
               try {
@@ -90,6 +105,36 @@ export default function App() {
       }
     }
     loadAndHydrateVoicemails();
+  }, []);
+
+  // Poll server for new voicemails every 5 seconds to keep devices/profiles perfectly in-sync in real-time
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/voicemails');
+        if (response.ok) {
+          const data = await response.json();
+          const hydrated = data.map((v: any) => ({
+            ...v,
+            audioBlobUrl: `/api/voicemails/${v.id}/audio`
+          }));
+          
+          setVoicemails((currentVoicemails) => {
+            const currentIds = currentVoicemails.map(v => v.id).join(',');
+            const newIds = hydrated.map((v: any) => v.id).join(',');
+            if (currentIds !== newIds) {
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(hydrated));
+              return hydrated;
+            }
+            return currentVoicemails;
+          });
+        }
+      } catch (err) {
+        console.warn("Polling voicemails failed:", err);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Lock document body scroll when any modal or fullscreen player is active for perfect mobile smoothness
@@ -142,18 +187,77 @@ export default function App() {
 
   // Add custom recorded voicemail
   const handleAddVoicemail = async (newLetter: VoiceLetter, audioBlob: Blob) => {
+    let serverSuccess = false;
+    let savedLetter = newLetter;
+    
+    try {
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
+
+      const response = await fetch('/api/voicemails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...newLetter,
+          audioBase64: base64Audio,
+          activeProfileId: activeProfile?.id
+        }),
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        if (resData.success && resData.voicemail) {
+          savedLetter = {
+            ...resData.voicemail,
+            audioBlobUrl: `/api/voicemails/${resData.voicemail.id}/audio`
+          };
+          serverSuccess = true;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to upload recording to server:", err);
+    }
+
     try {
       await saveTrailerBlob(newLetter.id, audioBlob);
     } catch (err) {
       console.error("Failed to save recording to IndexedDB:", err);
     }
 
-    // Sender automatically listened to their own voicemail
     const letterWithListened = {
-      ...newLetter,
+      ...savedLetter,
       listenedBy: activeProfile ? [activeProfile.id] : [],
     };
-    const updated = [letterWithListened, ...voicemails];
+
+    let updated: VoiceLetter[];
+    if (serverSuccess) {
+      try {
+        const response = await fetch('/api/voicemails');
+        if (response.ok) {
+          const data = await response.json();
+          updated = data.map((v: any) => ({
+            ...v,
+            audioBlobUrl: `/api/voicemails/${v.id}/audio`
+          }));
+        } else {
+          updated = [letterWithListened, ...voicemails];
+        }
+      } catch (e) {
+        updated = [letterWithListened, ...voicemails];
+      }
+    } else {
+      updated = [letterWithListened, ...voicemails];
+    }
+
     saveToLocalStorage(updated);
 
     // In-app success notification toast
@@ -176,9 +280,10 @@ export default function App() {
   };
 
   // React to voicemail message with romance emoji
-  const handleReactToVoicemail = (id: string, emoji: string) => {
+  const handleReactToVoicemail = async (id: string, emoji: string) => {
     if (!activeProfile) return;
 
+    let targetLetter: VoiceLetter | null = null;
     const updated = voicemails.map((letter) => {
       if (letter.id === id) {
         const reactions = letter.reactions || [];
@@ -188,68 +293,91 @@ export default function App() {
 
         let newReactions = [...reactions];
         if (existingIdx > -1) {
-          // Toggle off
           newReactions.splice(existingIdx, 1);
         } else {
-          // Toggle on
           newReactions.push({ profileId: activeProfile.id, emoji });
         }
 
-        return { ...letter, reactions: newReactions };
+        targetLetter = { ...letter, reactions: newReactions };
+        return targetLetter;
       }
       return letter;
     });
 
     saveToLocalStorage(updated);
 
-    // Sync selectedVoicemail active state in-player
-    if (selectedVoicemail && selectedVoicemail.id === id) {
-      setSelectedVoicemail((prev) => {
-        if (!prev) return null;
-        const reactions = prev.reactions || [];
-        const existingIdx = reactions.findIndex(
-          (r) => r.profileId === activeProfile.id && r.emoji === emoji
-        );
-        let newReactions = [...reactions];
-        if (existingIdx > -1) {
-          newReactions.splice(existingIdx, 1);
-        } else {
-          newReactions.push({ profileId: activeProfile.id, emoji });
-        }
-        return { ...prev, reactions: newReactions };
-      });
+    if (selectedVoicemail && selectedVoicemail.id === id && targetLetter) {
+      setSelectedVoicemail(targetLetter);
+    }
+
+    if (targetLetter) {
+      try {
+        await fetch(`/api/voicemails/${id}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reactions: (targetLetter as VoiceLetter).reactions }),
+        });
+      } catch (err) {
+        console.error("Failed to sync reaction to server:", err);
+      }
     }
   };
 
   // Treasured Moments (Toggle Favorite)
-  const handleToggleFavorite = (id: string) => {
+  const handleToggleFavorite = async (id: string) => {
+    let targetLetter: VoiceLetter | null = null;
     const updated = voicemails.map((letter) => {
       if (letter.id === id) {
-        return { ...letter, isFavorite: !letter.isFavorite };
+        targetLetter = { ...letter, isFavorite: !letter.isFavorite };
+        return targetLetter;
       }
       return letter;
     });
     saveToLocalStorage(updated);
 
-    // If active player is viewing, keep it in sync
-    if (selectedVoicemail && selectedVoicemail.id === id) {
-      setSelectedVoicemail((prev) => prev ? { ...prev, isFavorite: !prev.isFavorite } : null);
+    if (selectedVoicemail && selectedVoicemail.id === id && targetLetter) {
+      setSelectedVoicemail(targetLetter);
+    }
+
+    if (targetLetter) {
+      try {
+        await fetch(`/api/voicemails/${id}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isFavorite: (targetLetter as VoiceLetter).isFavorite }),
+        });
+      } catch (err) {
+        console.error("Failed to sync favorite to server:", err);
+      }
     }
   };
 
   // Our Memories (Toggle Archive)
-  const handleToggleArchive = (id: string) => {
+  const handleToggleArchive = async (id: string) => {
+    let targetLetter: VoiceLetter | null = null;
     const updated = voicemails.map((letter) => {
       if (letter.id === id) {
-        return { ...letter, isArchived: !letter.isArchived };
+        targetLetter = { ...letter, isArchived: !letter.isArchived };
+        return targetLetter;
       }
       return letter;
     });
     saveToLocalStorage(updated);
 
-    // If active player is viewing, keep it in sync
-    if (selectedVoicemail && selectedVoicemail.id === id) {
-      setSelectedVoicemail((prev) => prev ? { ...prev, isArchived: !prev.isArchived } : null);
+    if (selectedVoicemail && selectedVoicemail.id === id && targetLetter) {
+      setSelectedVoicemail(targetLetter);
+    }
+
+    if (targetLetter) {
+      try {
+        await fetch(`/api/voicemails/${id}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isArchived: (targetLetter as VoiceLetter).isArchived }),
+        });
+      } catch (err) {
+        console.error("Failed to sync archive to server:", err);
+      }
     }
   };
 
@@ -257,6 +385,15 @@ export default function App() {
   const handleDeleteVoicemail = async (id: string) => {
     const updated = voicemails.filter((letter) => letter.id !== id);
     saveToLocalStorage(updated);
+    
+    try {
+      await fetch(`/api/voicemails/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error("Failed to delete voicemail from server:", err);
+    }
+
     try {
       await deleteTrailerBlob(id);
     } catch (err) {
@@ -265,10 +402,9 @@ export default function App() {
   };
 
   // Select voicemail to play
-  const handleSelectVoicemail = (letter: VoiceLetter) => {
+  const handleSelectVoicemail = async (letter: VoiceLetter) => {
     setSelectedVoicemail(letter);
 
-    // Mark as read/listened by active profile
     if (activeProfile) {
       const alreadyListened = letter.listenedBy?.includes(activeProfile.id);
       if (!alreadyListened) {
@@ -280,6 +416,16 @@ export default function App() {
           return v;
         });
         saveToLocalStorage(updatedVoicemails);
+
+        try {
+          await fetch(`/api/voicemails/${letter.id}/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ listenedBy: updatedListenedBy }),
+          });
+        } catch (err) {
+          console.error("Failed to sync read status to server:", err);
+        }
       }
     }
     

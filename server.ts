@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, GenerateVideosOperation } from "@google/genai";
 import { Readable } from "stream";
@@ -10,7 +11,158 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+const DATA_DIR = path.join(process.cwd(), "data");
+const VOICEMAILS_FILE = path.join(DATA_DIR, "voicemails.json");
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Helper to read voicemails metadata
+const readVoicemailsMetadata = (): any[] => {
+  if (!fs.existsSync(VOICEMAILS_FILE)) {
+    return [];
+  }
+  try {
+    const content = fs.readFileSync(VOICEMAILS_FILE, "utf-8");
+    return JSON.parse(content);
+  } catch (err) {
+    console.error("Error reading voicemails file:", err);
+    return [];
+  }
+};
+
+// Helper to write voicemails metadata
+const writeVoicemailsMetadata = (data: any[]) => {
+  try {
+    fs.writeFileSync(VOICEMAILS_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error writing voicemails file:", err);
+  }
+};
+
+// GET list of voicemails
+app.get("/api/voicemails", (req, res) => {
+  const list = readVoicemailsMetadata();
+  res.json(list);
+});
+
+// POST a new voicemail
+app.post("/api/voicemails", (req, res) => {
+  try {
+    const { id, senderName, chapter, title, dateString, duration, noteText, timestamp, audioBase64, activeProfileId } = req.body;
+    
+    if (!id || !senderName || !audioBase64) {
+      res.status(400).json({ error: "id, senderName, and audioBase64 are required." });
+      return;
+    }
+
+    // 1. Save audio binary to disk
+    const audioPath = path.join(DATA_DIR, `audio_${id}.webm`);
+    const audioBuffer = Buffer.from(audioBase64, "base64");
+    fs.writeFileSync(audioPath, audioBuffer);
+
+    // 2. Save metadata (excluding audioBase64)
+    const list = readVoicemailsMetadata();
+    const newLetter = {
+      id,
+      senderName,
+      chapter: chapter || undefined,
+      category: 'Today',
+      title: title || 'A new recording',
+      dateString,
+      duration,
+      noteText,
+      timestamp: timestamp || Date.now(),
+      isFavorite: false,
+      isArchived: false,
+      listenedBy: [activeProfileId || ""].filter(Boolean),
+      reactions: [],
+    };
+    
+    list.unshift(newLetter);
+    writeVoicemailsMetadata(list);
+
+    console.log(`[Voicemails] Added new voicemail ${id} from ${senderName}`);
+    res.json({ success: true, voicemail: newLetter });
+  } catch (err: any) {
+    console.error("Error creating voicemail:", err);
+    res.status(500).json({ error: err.message || "Failed to save voicemail." });
+  }
+});
+
+// GET audio stream for a voicemail
+app.get("/api/voicemails/:id/audio", (req, res) => {
+  try {
+    const { id } = req.params;
+    const audioPath = path.join(DATA_DIR, `audio_${id}.webm`);
+    
+    if (!fs.existsSync(audioPath)) {
+      res.status(404).json({ error: "Audio recording not found." });
+      return;
+    }
+
+    res.setHeader("Content-Type", "audio/webm");
+    const stream = fs.createReadStream(audioPath);
+    stream.pipe(res);
+  } catch (err: any) {
+    console.error("Error streaming audio:", err);
+    res.status(500).json({ error: err.message || "Failed to stream audio." });
+  }
+});
+
+// POST update a voicemail's properties (reactions, favorite, archive, listenedBy)
+app.post("/api/voicemails/:id/update", (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const list = readVoicemailsMetadata();
+    const index = list.findIndex((item) => item.id === id);
+    
+    if (index === -1) {
+      res.status(404).json({ error: "Voicemail not found." });
+      return;
+    }
+
+    list[index] = {
+      ...list[index],
+      ...updates
+    };
+    
+    writeVoicemailsMetadata(list);
+    res.json({ success: true, voicemail: list[index] });
+  } catch (err: any) {
+    console.error("Error updating voicemail:", err);
+    res.status(500).json({ error: err.message || "Failed to update voicemail." });
+  }
+});
+
+// DELETE a voicemail
+app.delete("/api/voicemails/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const audioPath = path.join(DATA_DIR, `audio_${id}.webm`);
+    if (fs.existsSync(audioPath)) {
+      fs.unlinkSync(audioPath);
+    }
+
+    const list = readVoicemailsMetadata();
+    const filtered = list.filter((item) => item.id !== id);
+    writeVoicemailsMetadata(filtered);
+
+    console.log(`[Voicemails] Deleted voicemail ${id}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error deleting voicemail:", err);
+    res.status(500).json({ error: err.message || "Failed to delete voicemail." });
+  }
+});
 
 // Initialize Google GenAI client lazily (fails gracefully if key is missing)
 const getAiClient = () => {
